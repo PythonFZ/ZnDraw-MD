@@ -1,0 +1,13 @@
+services:
+  simgen:
+    image: macemp0
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 5000M
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
