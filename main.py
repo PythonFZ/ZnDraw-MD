@@ -1,17 +1,16 @@
-import mace_models
+from mace.calculators import mace_mp
+
 from ase.md.langevin import Langevin
-from zndraw import ZnDraw
-from zndraw.modify import UpdateScene
+from zndraw import ZnDraw, Extension
 from ase import units
 import ase
-import typing as t
 import tqdm
 import ase.optimize
 import enum
 from ase.calculators.lj import LennardJones
 
 
-class Optimizer(enum.Enum):
+class Optimizer(enum.StrEnum):
     """Available optimizers for geometry optimization."""
 
     LBFGS = "LBFGS"
@@ -19,17 +18,16 @@ class Optimizer(enum.Enum):
     BFGS = "BFGS"
 
 
-class Models(enum.Enum):
+class Models(enum.StrEnum):
     """Available models for energy and force prediction."""
 
     MACE_MP_0 = "MACE-MP-0"
     LJ = "LJ"
 
 
-class MolecularDynamics(UpdateScene):
+class MolecularDynamics(Extension):
     """Run molecular dynamics in the NVT ensemble using Langevin dynamics."""
 
-    discriminator: t.Literal["MolecularDynamics"] = "MolecularDynamics"
     model: Models = Models.MACE_MP_0
     temperature: float = 300
     time_step: float = 0.5
@@ -54,7 +52,7 @@ class MolecularDynamics(UpdateScene):
             friction=self.friction,
         )
         vis.bookmarks = vis.bookmarks | {vis.step: "Molecular dynamics"}
-        for _ in tqdm.trange(self.n_steps):
+        for step in tqdm.trange(self.n_steps):
             dyn.run(1)
             vis.append(
                 ase.Atoms(
@@ -64,12 +62,13 @@ class MolecularDynamics(UpdateScene):
                     cell=atoms.get_cell(),
                 )
             )
+            if step > 1000:  # max 100 steps
+                break
 
 
-class GeomOpt(UpdateScene):
+class GeomOpt(Extension):
     """Run geometry optimization"""
 
-    discriminator: t.Literal["GeomOpt"] = "GeomOpt"
     model: Models = Models.MACE_MP_0
 
     optimizer: Optimizer = Optimizer.LBFGS
@@ -95,37 +94,32 @@ class GeomOpt(UpdateScene):
                     cell=atoms.get_cell(),
                 )
             )
-            if idx > 100:  # max 100 steps
+            if idx > 1000:  # max 100 steps
                 break
 
 
 if __name__ == "__main__":
-    mace_mp_0_model_calc = mace_models.LoadModel.from_rev(
-        "MACE-MP-0", remote="https://github.com/RokasEl/MACE-Models.git"
-    ).get_calculator()
+    import os
+
+    mace_mp_0_model_calc = mace_mp(
+        model="medium", dispersion=False, default_dtype="float32", device="cuda"
+    )
+
     vis = ZnDraw(
-        url="https://zndraw.icp.uni-stuttgart.de",
+        url=os.environ["ZNDRAW_URL"],
+        token=os.environ.get("ZNDRAW_TOKEN"),
+        auth_token=os.environ.get("ZNDRAW_AUTH_TOKEN"),
     )
     vis.register_modifier(
         MolecularDynamics,
         run_kwargs={"calc": mace_mp_0_model_calc},
-        default=True,  # type: ignore
+        public=True,
     )
     vis.socket.sleep(5)
     vis.register_modifier(
         GeomOpt,
         run_kwargs={"calc": mace_mp_0_model_calc},
-        default=True,  # type: ignore
+        public=True,
     )
     print("All modifiers registered. Starting the main loop...")
-    while True:
-        try:
-            vis.socket.emit("modifier:available", vis._available)
-        except Exception as e:
-            print(32 * "-")
-            print("Not connected to ZnDraw: %s", e)
-            print("Trying to reconnect...")
-            vis.reconnect()
-            print("Reconnected to ZnDraw")
-        finally:
-            vis.socket.sleep(10)
+    vis.socket.wait()

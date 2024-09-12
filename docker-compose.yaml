@@ -1,7 +1,11 @@
 services:
-  simgen:
-    image: macemp0
+  zndraw_md:
+    build:
+      context: .
     restart: always
+    environment:
+      - ZNDRAW_URL=your-zndraw-url
+      - ZNDRAW_AUTH_TOKEN=your-zndraw-auth-token
     deploy:
       resources:
         limits:

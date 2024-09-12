@@ -1,0 +1,3 @@
+zndraw>=0.4.7
+mace-torch
+rdkit2ase>=0.1.4
