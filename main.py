@@ -23,9 +23,13 @@ def freeze_copy_atoms(ref: ase.Atoms) -> ase.Atoms:
         pbc=ref.get_pbc(),
         cell=ref.get_cell(),
     )
-    atoms.calc = SinglePointCalculator(
-        atoms, energy=ref.get_potential_energy(), forces=ref.get_forces()
-    )
+    if ref.calc is not None:
+        results = {}
+        if "energy" in ref.calc.results:
+            results["energy"] = ref.calc.results["energy"]
+        if "forces" in ref.calc.results:
+            results["forces"] = ref.calc.results["forces"]
+        atoms.calc = SinglePointCalculator(atoms, **results)
     return atoms
 
 
@@ -139,7 +143,7 @@ class AddFromSMILES(Extension):
         if hasattr(scene, "connectivity"):
             del scene.connectivity
 
-        vis.append(scene)
+        vis.append(freeze_copy_atoms(scene))
         vis.bookmarks = vis.bookmarks | {vis.step: "AddFromSMILES"}
 
 
