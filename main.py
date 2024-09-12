@@ -164,7 +164,7 @@ class Solvate(Extension):
 
         scene = rdkit2ase.pack(
             [[scene], [solvent]],
-            [1, self.count],
+            [int(len(scene) > 0), self.count],
             density=self.density,
             pbc=self.pbc,
             tolerance=self.tolerance,
